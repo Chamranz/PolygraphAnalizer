@@ -1,0 +1,132 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+from cycler import cycler
+import matplotlib as mpl
+
+def indicies_of_outliers(x):
+    q1, q3 = np.percentile(x, [25, 75])
+    iqr = q3 - q1
+    lower_bound = q1 - (iqr * 1.5)
+    upper_bound = q3 + (iqr * 1.5)
+    arr1 = np.array(np.where(x < lower_bound))[0, :]
+    arr2 = np.array(np.where(x > upper_bound))[0, :]
+    array = np.append(arr1, arr2, axis=0)
+    return array
+def MinMax(arr1):
+    arr = []
+    for i in range(len(arr1)):
+        arr.append((arr1[i] - np.mean(arr1))/(np.max(arr1) - np.min(arr1)))
+    return arr
+
+def Building(file, data):
+
+    Valency = file['Знак PPG']
+    Involvement = file['Сила SGR + PPG']
+    dataframe = file
+    N_task = int(data.shape[0])
+    Tasks = []
+    TaskNumber = -1
+    Ng = 1 # Количество графиков в одном рисунке
+
+    #Disign
+    #plt.style.use('fivethirtyeight')
+    mpl.rcParams['axes.prop_cycle'] = cycler(color=['#163969', '#F87D00', '#8B9BB3'])
+    mpl.rcParams['axes.linewidth'] = 1
+    mpl.rcParams['lines.linewidth'] = 4
+    mpl.rcParams['lines.solid_capstyle'] = 'butt'
+
+    while N_task / Ng >= 1:
+        N_task -= Ng
+        Tasks.append(Ng)
+    if N_task % Ng != 0:
+        Tasks.append(N_task % Ng)
+    for team in Tasks:
+        if N_task == 1 or N_task == 0:
+            tasks_per_page = 1
+            TaskNumber += 1
+            duration = np.arange(data[TaskNumber][0], data[TaskNumber][1] + 1, 1)
+            time = data[TaskNumber]
+            allData1 = dataframe[(dataframe['Время'] >= data[TaskNumber][0]) & (dataframe['Время'] <= data[TaskNumber][1] + 1)][
+                ["Время", 'Сила SGR + MPG', 'Знак MPG']]
+            Indicies = np.concatenate(
+                (indicies_of_outliers(allData1['Знак MPG']), indicies_of_outliers(allData1['Сила SGR + MPG'])))
+            print("Индексы", Indicies)
+            allData1 = allData1.drop(index=Indicies + data[TaskNumber][0] - 1)
+            allData = allData1.loc[(allData1['Знак MPG'].ne(0)) & (allData1['Сила SGR + MPG'].ne(0))]
+
+            Valency = np.array(allData['Знак MPG'][0:time[1] - time[0] + 1])
+            Involvement = np.array(allData['Сила SGR + MPG'][0:time[1] - time[0] + 1])
+            duration = np.array(allData['Время'][0:time[1] - time[0] + 1])
+
+            Val_std = MinMax(Valency)
+            Inv_std = MinMax(Involvement)
+            #TrendValency = np.poly1d(
+            #    np.polyfit(list(duration), list(Val_std[data[TaskNumber][0]:data[TaskNumber][1] + 1]), 1))
+            #TrendInvolvement = np.poly1d(
+            #    np.polyfit(list(duration), list(Inv_std[data[TaskNumber][0]:data[TaskNumber][1] + 1]), 1))
+            print('--------------------')
+            print('duration = ', len(duration), 'Val_std = ', len(Val_std) )
+            fig, axs = plt.subplots(3, tasks_per_page, figsize=(10, 15))
+            axs[0].plot(duration, Val_std, color='#163969')
+            axs[0].spines['top'].set_visible(False)
+            axs[0].spines['right'].set_visible(False)
+            #axs[0].spines['bottom'].set_visible(False)
+            axs[0].spines['left'].set_visible(False)
+            #axs[0].plot(duration, TrendValency(duration), '--', label='Линия тренда по валентности', color='#8B9BB3')
+            #axs[0].set_title(f'Вовлеченность по заданию {TaskNumber}')
+
+            axs[1].plot(duration, Inv_std, '-', color='#F87D00')
+            axs[1].spines['top'].set_visible(False)
+            axs[1].spines['right'].set_visible(False)
+            #axs[1].spines['bottom'].set_visible(False)
+            axs[1].spines['left'].set_visible(False)
+            #axs[1].plot(duration, TrendInvolvement(duration), '--',
+            #                  label='Линия тренда по вовлеченности', color='#FFD2A6')
+
+            #axs[0].set_xlabel('Вовлеченность')
+            #axs[0].set_ylabel('Время')
+
+
+
+            # отдельные расчеты для наложенных
+            TrendValency = np.poly1d(np.polyfit(list(duration), Val_std, 1))
+            TrendInvolvement = np.poly1d(np.polyfit(list(duration), Inv_std, 1))
+            axs[2].plot(duration, TrendValency(duration), label='Линия тренда по валентности', color='#163969')
+            axs[2].plot(duration, TrendInvolvement(duration), label='Линия тренда по вовлеченности', color='#F87D00')
+            axs[2].spines['top'].set_visible(False)
+            axs[2].spines['right'].set_visible(False)
+            #axs[2].spines['bottom'].set_visible(False)
+            axs[2].spines['left'].set_visible(False)
+
+            name = f'Задание {TaskNumber+1}'
+            plt.savefig(name)
+        else:
+            tasks_per_page = team
+            for task in range(team):
+                # Расчеты
+                TaskNumber += 1
+                duration = np.arange(data[TaskNumber][0], data[TaskNumber][1] + 1, 1)
+                Val_std = MinMax(list(Valency[data[TaskNumber][0]:data[TaskNumber][1] + 1]))
+                Inv_std = MinMax(list(Involvement[data[TaskNumber][0]:data[TaskNumber][1] + 1]))
+                TrendValency = np.poly1d(
+                    np.polyfit(list(duration), list(Valency[data[TaskNumber][0]:data[TaskNumber][1] + 1]), 1))
+                TrendInvolvement = np.poly1d(
+                    np.polyfit(list(duration), list(Involvement[data[TaskNumber][0]:data[TaskNumber][1] + 1]), 1))
+
+                fig, axs = plt.subplots(3, tasks_per_page, figsize=(10, 15))
+                axs[0, task].plot(duration, Valency[data[TaskNumber][0]:data[TaskNumber][1] + 1], color='blue')
+                axs[0, task].plot(duration, TrendValency(duration), '--', color='blue',  label='Линия тренда по валентности')
+                axs[0, task].set_title(f'Вовлеченность по заданию {TaskNumber}')
+                axs[1, task].plot(duration, Involvement[data[TaskNumber][0] - 1:data[TaskNumber][1]], '-', color='red')
+                axs[1, task].plot(duration, TrendInvolvement(duration), '--', color='red', label='Линия тренда по вовлеченности')
+                axs[0, task].set_xlabel('Вовлеченность')
+                axs[0, task].set_ylabel('Время')
+
+                # отдельные расчеты для наложенных
+                TrendValency = np.poly1d(np.polyfit(list(duration), Val_std, 1))
+                TrendInvolvement = np.poly1d(np.polyfit(list(duration), Inv_std, 1))
+                axs[2, task].plot(duration, TrendValency(duration), label='Линия тренда по валентности')
+                axs[2, task].plot(duration, TrendInvolvement(duration), label='Линия тренда по вовлеченности')
+
+    plt.show()
